@@ -1,4 +1,4 @@
-name: Build Android APK (Internal Java 8 Force)
+name: Build Android APK from Direct ZIP
 
 on:
   push:
@@ -25,11 +25,11 @@ jobs:
           mv */.* . 2>/dev/null || true
         fi
 
-    - name: Set up JDK 17 (Required for Tools)
+    - name: Set up JDK 17
       uses: actions/setup-java@v4
       with:
         distribution: 'zulu'
-        java-version: '17' # টুলস চলার জন্য মেইন জাভা ১৭-ই রাখলাম
+        java-version: '17'
 
     - name: Setup Android SDK
       uses: android-actions/setup-android@v3
@@ -39,16 +39,27 @@ jobs:
       with:
         gradle-version: 9.3.1
 
-    - name: Force Java 8 via Compiler Args & Headless Mode
+    - name: Ultimate Java 17 Core Injection & Headless Mode
       run: |
-        # গ্লোবাল হেডলেস মোড
+        # গ্লোবাল হেডলেস এনভায়রনমেন্ট
         echo "GRADLE_OPTS=-Djava.awt.headless=true -Dorg.gradle.jvmargs=\"-Xmx2048m -Djava.awt.headless=true\"" >> $GITHUB_ENV
         echo "systemProp.java.awt.headless=true" >> gradle.properties
         echo "org.gradle.jvmargs=-Djava.awt.headless=true -Xmx2048m" >> gradle.properties
         echo "kotlin.daemon.jvmargs=-Djava.awt.headless=true" >> gradle.properties
         
-        # গ্রেডল প্রোপার্টিজে কোটলিন টার্গেটকে ইন্টারনালি ১.৮ ফোর্স করা
-        echo "kotlin.jvm.target=1.8" >> gradle.properties
+        # প্রজেক্টের মেইন কোড লেভেলে জাভা ভার্সন রুলস ওভাররাইড করা
+        # টার্গেট ও কম্পাইল অপশনের জাভা ৮-কে নিখুঁতভাবে জাভা ১৭ করা হচ্ছে
+        find . -name "build.gradle*" -type f -exec sed -i 's/JavaVersion.VERSION_1_8/JavaVersion.VERSION_17/g' {} +
+        find . -name "build.gradle*" -type f -exec sed -i 's/jvmTarget = "1.8"/jvmTarget = "17"/g' {} +
+        find . -name "build.gradle*" -type f -exec sed -i 's/jvmTarget = 1.8/jvmTarget = 17/g' {} +
+        find . -name "build.gradle*" -type f -exec sed -i 's/targetCompatibility = 1.8/targetCompatibility = 17/g' {} +
+        find . -name "build.gradle*" -type f -exec sed -i 's/sourceCompatibility = 1.8/sourceCompatibility = 17/g' {} +
+        find . -name "build.gradle*" -type f -exec sed -i 's/targetCompatibility = JavaVersion.VERSION_1_8/targetCompatibility = JavaVersion.VERSION_17/g' {} +
+        find . -name "build.gradle*" -type f -exec sed -i 's/sourceCompatibility = JavaVersion.VERSION_1_8/sourceCompatibility = JavaVersion.VERSION_17/g' {} +
+        
+        # যদি প্রজেক্টে Version Catalog (toml) ব্যবহার করা হয়ে থাকে, তবে সেখানেও জাভা ভার্সন ফিক্স করা
+        find . -name "*.toml" -type f -exec sed -i 's/jvmTarget = "1.8"/jvmTarget = "17"/g' {} +
+        find . -name "*.toml" -type f -exec sed -i 's/java = "1.8"/java = "17"/g' {} +
 
     - name: Smart Debug Keystore Generation
       run: |
@@ -59,19 +70,19 @@ jobs:
         mkdir -p app
         cp debug.keystore app/debug.keystore || true
 
-    - name: Build Debug APK with Forced Java 8 Target
+    - name: Build Debug APK with Forced Java 17 Global Target
       run: |
-        # কম্পাইলারকে স্পষ্টভাবে বলে দেওয়া হচ্ছে ক্লদের কোড অনুযায়ী জাভা ১.৮-এ কম্পাইল করতে
+        # কম্পাইল ও রান টাইমে সবকিছুর জন্য জাভা ১৭ নিশ্চিত করা
         gradle :app:assembleDebug --no-daemon \
           -Pandroid.skipGoogleServicesPlugin=true \
           -Djava.awt.headless=true \
-          -Pkotlin.jvm.target=1.8 \
-          -Pandroid.compileOptions.sourceCompatibility=1.8 \
-          -Pandroid.compileOptions.targetCompatibility=1.8
+          -Pkotlin.jvm.target=17 \
+          -Pandroid.compileOptions.sourceCompatibility=17 \
+          -Pandroid.compileOptions.targetCompatibility=17
         
     - name: Upload APK Artifact
       uses: actions/upload-artifact@v4
       with:
-        name: Claude-Forced-Java8-APK
+        name: Claude-Core-Fixed-APK
         path: |
           **/build/outputs/apk/debug/*.apk
