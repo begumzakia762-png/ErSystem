@@ -39,7 +39,7 @@ jobs:
       with:
         gradle-version: 9.3.1
 
-    - name: Aggressive Java 17 Rewrite & Headless Mode
+    - name: Targeted Java 17 Rewrite & Headless Mode
       run: |
         # গ্লোবাল হেডলেস মোড
         echo "GRADLE_OPTS=-Djava.awt.headless=true -Dorg.gradle.jvmargs=\"-Xmx2048m -Djava.awt.headless=true\"" >> $GITHUB_ENV
@@ -47,10 +47,12 @@ jobs:
         echo "org.gradle.jvmargs=-Djava.awt.headless=true -Xmx2048m" >> gradle.properties
         echo "kotlin.daemon.jvmargs=-Djava.awt.headless=true" >> gradle.properties
         
-        # জাদুকরী লিনাক্স কমান্ড: সবকটি build.gradle এবং build.gradle.kts ফাইলের ভেতরের ১.৮ মোডকে ১৭ বানিয়ে দেওয়া হচ্ছে
-        find . -name "build.gradle*" -type f -exec sed -i 's/1\.8/17/g' {} +
-        find . -name "build.gradle*" -type f -exec sed -i 's/VERSION_1_8/VERSION_17/g' {} +
+        # লাইব্রেরির ভেতরের ১.৮ নষ্ট না করে শুধুমাত্র জাভা ও কোটলিনের jvmTarget গুলোকে ১৭ করা হচ্ছে
+        find . -name "build.gradle*" -type f -exec sed -i 's/jvmTarget = "1.8"/jvmTarget = "17"/g' {} +
+        find . -name "build.gradle*" -type f -exec sed -i 's/jvmTarget = 1.8/jvmTarget = 17/g' {} +
         find . -name "build.gradle*" -type f -exec sed -i 's/JavaVersion.VERSION_1_8/JavaVersion.VERSION_17/g' {} +
+        find . -name "build.gradle*" -type f -exec sed -i 's/compatibility = 1.8/compatibility = 17/g' {} +
+        find . -name "build.gradle*" -type f -exec sed -i 's/compatibility = "1.8"/compatibility = "17"/g' {} +
 
     - name: Smart Debug Keystore Generation
       run: |
@@ -61,13 +63,17 @@ jobs:
         mkdir -p app
         cp debug.keystore app/debug.keystore || true
 
-    - name: Build Debug APK
+    - name: Build Debug APK with Dependency Resolution Fix
       run: |
-        gradle :app:assembleDebug --no-daemon -Pandroid.skipGoogleServicesPlugin=true -Djava.awt.headless=true
+        # গ্রেডলকে ম্যাভেন সেন্ট্রাল এবং গুগল রিপোজিটরি ব্যবহার করতে বাধ্য করা এবং বিল্ড রান করা
+        gradle :app:assembleDebug --no-daemon \
+          -Pandroid.skipGoogleServicesPlugin=true \
+          -Djava.awt.headless=true \
+          --refresh-dependencies
         
     - name: Upload APK Artifact
       uses: actions/upload-artifact@v4
       with:
-        name: Claude-Aggressive-Fix-APK
+        name: Claude-Dependency-Fixed-APK
         path: |
           **/build/outputs/apk/debug/*.apk
