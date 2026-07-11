@@ -39,27 +39,17 @@ jobs:
       with:
         gradle-version: 9.3.1
 
-    - name: Ultimate Java 17 Core Injection & Headless Mode
+    - name: Force Global Java 17 via Environment & Options
       run: |
-        # গ্লোবাল হেডলেস এনভায়রনমেন্ট
+        # গ্লোবাল হেডলেস মোড
         echo "GRADLE_OPTS=-Djava.awt.headless=true -Dorg.gradle.jvmargs=\"-Xmx2048m -Djava.awt.headless=true\"" >> $GITHUB_ENV
         echo "systemProp.java.awt.headless=true" >> gradle.properties
         echo "org.gradle.jvmargs=-Djava.awt.headless=true -Xmx2048m" >> gradle.properties
         echo "kotlin.daemon.jvmargs=-Djava.awt.headless=true" >> gradle.properties
         
-        # প্রজেক্টের মেইন কোড লেভেলে জাভা ভার্সন রুলস ওভাররাইড করা
-        # টার্গেট ও কম্পাইল অপশনের জাভা ৮-কে নিখুঁতভাবে জাভা ১৭ করা হচ্ছে
-        find . -name "build.gradle*" -type f -exec sed -i 's/JavaVersion.VERSION_1_8/JavaVersion.VERSION_17/g' {} +
-        find . -name "build.gradle*" -type f -exec sed -i 's/jvmTarget = "1.8"/jvmTarget = "17"/g' {} +
-        find . -name "build.gradle*" -type f -exec sed -i 's/jvmTarget = 1.8/jvmTarget = 17/g' {} +
-        find . -name "build.gradle*" -type f -exec sed -i 's/targetCompatibility = 1.8/targetCompatibility = 17/g' {} +
-        find . -name "build.gradle*" -type f -exec sed -i 's/sourceCompatibility = 1.8/sourceCompatibility = 17/g' {} +
-        find . -name "build.gradle*" -type f -exec sed -i 's/targetCompatibility = JavaVersion.VERSION_1_8/targetCompatibility = JavaVersion.VERSION_17/g' {} +
-        find . -name "build.gradle*" -type f -exec sed -i 's/sourceCompatibility = JavaVersion.VERSION_1_8/sourceCompatibility = JavaVersion.VERSION_17/g' {} +
-        
-        # যদি প্রজেক্টে Version Catalog (toml) ব্যবহার করা হয়ে থাকে, তবে সেখানেও জাভা ভার্সন ফিক্স করা
-        find . -name "*.toml" -type f -exec sed -i 's/jvmTarget = "1.8"/jvmTarget = "17"/g' {} +
-        find . -name "*.toml" -type f -exec sed -i 's/java = "1.8"/java = "17"/g' {} +
+        # গ্রেডল প্রোপার্টিজ ফাইলে কোটলিন ও জাভা টার্গেট ১৭ ফোর্স করা (যাতে ফাইলের কোড যাই থাকুক, এটা মেইন প্রায়োরিটি পায়)
+        echo "kotlin.jvm.target=17" >> gradle.properties
+        echo "android.experimental.ksp.enable=false" >> gradle.properties
 
     - name: Smart Debug Keystore Generation
       run: |
@@ -70,19 +60,21 @@ jobs:
         mkdir -p app
         cp debug.keystore app/debug.keystore || true
 
-    - name: Build Debug APK with Forced Java 17 Global Target
+    - name: Force Re-compile with Java 17 (Ultimate Direct Fix)
       run: |
-        # কম্পাইল ও রান টাইমে সবকিছুর জন্য জাভা ১৭ নিশ্চিত করা
+        # এখানে আমরা গ্রেডলের সমস্ত টাস্কের ব্যাকএন্ড অপশনে জাভা ১৭ ইনজেক্ট করে দিচ্ছি
         gradle :app:assembleDebug --no-daemon \
           -Pandroid.skipGoogleServicesPlugin=true \
           -Djava.awt.headless=true \
+          -Dorg.gradle.java.home=$JAVA_HOME_17_X64 \
           -Pkotlin.jvm.target=17 \
-          -Pandroid.compileOptions.sourceCompatibility=17 \
-          -Pandroid.compileOptions.targetCompatibility=17
+          -Pandroid.compileOptions.sourceCompatibility=VERSION_17 \
+          -Pandroid.compileOptions.targetCompatibility=VERSION_17 \
+          -Pksp.allow.inconsistent.jvm.target=true
         
     - name: Upload APK Artifact
       uses: actions/upload-artifact@v4
       with:
-        name: Claude-Core-Fixed-APK
+        name: Claude-Ultimate-Forced-APK
         path: |
           **/build/outputs/apk/debug/*.apk
