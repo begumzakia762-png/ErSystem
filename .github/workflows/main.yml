@@ -39,18 +39,18 @@ jobs:
       with:
         gradle-version: 9.3.1
 
-    - name: Force Java 17 via Gradle Properties (Ultimate Fix)
+    - name: Aggressive Java 17 Rewrite & Headless Mode
       run: |
-        # গ্লোবাল হেডলেস মোড অ্যাক্টিভেট করা
+        # গ্লোবাল হেডলেস মোড
         echo "GRADLE_OPTS=-Djava.awt.headless=true -Dorg.gradle.jvmargs=\"-Xmx2048m -Djava.awt.headless=true\"" >> $GITHUB_ENV
         echo "systemProp.java.awt.headless=true" >> gradle.properties
         echo "org.gradle.jvmargs=-Djava.awt.headless=true -Xmx2048m" >> gradle.properties
         echo "kotlin.daemon.jvmargs=-Djava.awt.headless=true" >> gradle.properties
         
-        # প্রজেক্টের ভেতরের যেকোনো ভুল ভার্সনকে ওভাররাইড করার জন্য সরাসরি properties ফাইলে জাদুকরী ৩টি লাইন যোগ করা হচ্ছে
-        echo "org.gradle.java.home=${JAVA_HOME}" >> gradle.properties
-        echo "kotlin.jvm.target=17" >> gradle.properties
-        echo "org.gradle.jvmtoolchain.data.version=17" >> gradle.properties
+        # জাদুকরী লিনাক্স কমান্ড: সবকটি build.gradle এবং build.gradle.kts ফাইলের ভেতরের ১.৮ মোডকে ১৭ বানিয়ে দেওয়া হচ্ছে
+        find . -name "build.gradle*" -type f -exec sed -i 's/1\.8/17/g' {} +
+        find . -name "build.gradle*" -type f -exec sed -i 's/VERSION_1_8/VERSION_17/g' {} +
+        find . -name "build.gradle*" -type f -exec sed -i 's/JavaVersion.VERSION_1_8/JavaVersion.VERSION_17/g' {} +
 
     - name: Smart Debug Keystore Generation
       run: |
@@ -61,18 +61,13 @@ jobs:
         mkdir -p app
         cp debug.keystore app/debug.keystore || true
 
-    - name: Build Debug APK with Forced Toolchain
+    - name: Build Debug APK
       run: |
-        # কম্পাইলারকে স্ক্রিপ্ট রান করার সময় সরাসরি জাভা ১৭ এর গ্লোবাল প্রোপার্টি ফোর্স করা হচ্ছে
-        gradle :app:assembleDebug --no-daemon \
-          -Pandroid.skipGoogleServicesPlugin=true \
-          -Djava.awt.headless=true \
-          -Porg.gradle.java.installations.auto-download=false \
-          -Pkotlin.jvm.target=17
+        gradle :app:assembleDebug --no-daemon -Pandroid.skipGoogleServicesPlugin=true -Djava.awt.headless=true
         
     - name: Upload APK Artifact
       uses: actions/upload-artifact@v4
       with:
-        name: Claude-Toolchain-App-APK
+        name: Claude-Aggressive-Fix-APK
         path: |
           **/build/outputs/apk/debug/*.apk
