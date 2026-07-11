@@ -1,4 +1,4 @@
-name: Build Android APK (Java 8 Fallback)
+name: Build Android APK (Internal Java 8 Force)
 
 on:
   push:
@@ -25,11 +25,11 @@ jobs:
           mv */.* . 2>/dev/null || true
         fi
 
-    - name: Set up JDK 8 (Matches Claude Project)
+    - name: Set up JDK 17 (Required for Tools)
       uses: actions/setup-java@v4
       with:
         distribution: 'zulu'
-        java-version: '8' # পুরো সিস্টেমকে জাভা ৮-এ ডাউনগ্রেড করা হলো যেন কোনো মিসম্যাচ না হয়
+        java-version: '17' # টুলস চলার জন্য মেইন জাভা ১৭-ই রাখলাম
 
     - name: Setup Android SDK
       uses: android-actions/setup-android@v3
@@ -39,12 +39,16 @@ jobs:
       with:
         gradle-version: 9.3.1
 
-    - name: Force Headless Mode Globally
+    - name: Force Java 8 via Compiler Args & Headless Mode
       run: |
+        # গ্লোবাল হেডলেস মোড
         echo "GRADLE_OPTS=-Djava.awt.headless=true -Dorg.gradle.jvmargs=\"-Xmx2048m -Djava.awt.headless=true\"" >> $GITHUB_ENV
         echo "systemProp.java.awt.headless=true" >> gradle.properties
         echo "org.gradle.jvmargs=-Djava.awt.headless=true -Xmx2048m" >> gradle.properties
         echo "kotlin.daemon.jvmargs=-Djava.awt.headless=true" >> gradle.properties
+        
+        # গ্রেডল প্রোপার্টিজে কোটলিন টার্গেটকে ইন্টারনালি ১.৮ ফোর্স করা
+        echo "kotlin.jvm.target=1.8" >> gradle.properties
 
     - name: Smart Debug Keystore Generation
       run: |
@@ -55,14 +59,19 @@ jobs:
         mkdir -p app
         cp debug.keystore app/debug.keystore || true
 
-    - name: Build Debug APK with Java 8
+    - name: Build Debug APK with Forced Java 8 Target
       run: |
-        # ক্লদের অরিজিনাল কোড যেভাবে আছে, সেভাবেই জাভা ৮ এনভায়রনমেন্টে রান করা হচ্ছে
-        gradle :app:assembleDebug --no-daemon -Pandroid.skipGoogleServicesPlugin=true -Djava.awt.headless=true
+        # কম্পাইলারকে স্পষ্টভাবে বলে দেওয়া হচ্ছে ক্লদের কোড অনুযায়ী জাভা ১.৮-এ কম্পাইল করতে
+        gradle :app:assembleDebug --no-daemon \
+          -Pandroid.skipGoogleServicesPlugin=true \
+          -Djava.awt.headless=true \
+          -Pkotlin.jvm.target=1.8 \
+          -Pandroid.compileOptions.sourceCompatibility=1.8 \
+          -Pandroid.compileOptions.targetCompatibility=1.8
         
     - name: Upload APK Artifact
       uses: actions/upload-artifact@v4
       with:
-        name: Claude-Java8-App-APK
+        name: Claude-Forced-Java8-APK
         path: |
           **/build/outputs/apk/debug/*.apk
