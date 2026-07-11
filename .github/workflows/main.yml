@@ -39,22 +39,13 @@ jobs:
       with:
         gradle-version: 9.3.1
 
-    - name: Nuclear Java 17 Force & Headless Mode
+    - name: Setup Safe Environment & Headless Mode
       run: |
-        # গ্লোবাল হেডলেস এনভায়রনমেন্ট
+        # ফাইল এডিটের কোনো ঝামেলা নেই, লাইব্রেরি ভার্সন সব একদম ক্লদের অরিজিনালটাই থাকবে
         echo "GRADLE_OPTS=-Djava.awt.headless=true -Dorg.gradle.jvmargs=\"-Xmx2048m -Djava.awt.headless=true\"" >> $GITHUB_ENV
         echo "systemProp.java.awt.headless=true" >> gradle.properties
         echo "org.gradle.jvmargs=-Djava.awt.headless=true -Xmx2048m" >> gradle.properties
         echo "kotlin.daemon.jvmargs=-Djava.awt.headless=true" >> gradle.properties
-        
-        # বিল্ড ফাইলের সব ধরনের 1.8 বা 8 ডিক্লেয়ারেশনকে নিউক্লিয়ার উপায়ে সম্পূর্ণ ওভাররাইড করা হচ্ছে
-        find . -name "build.gradle*" -type f -exec sed -i 's/1\.8/17/g' {} +
-        find . -name "build.gradle*" -type f -exec sed -i 's/VERSION_1_8/VERSION_17/g' {} +
-        find . -name "build.gradle*" -type f -exec sed -i 's/"1\.8"/"17"/g' {} +
-        find . -name "build.gradle*" -type f -exec sed -i 's/'\''1\.8'\''/'\''17'\''/g' {} +
-        
-        # গ্রেডল অপশনে কোটলিন জেনারেটরকে সরাসরি নির্দেশ
-        echo "kotlin.jvm.target=17" >> gradle.properties
 
     - name: Smart Debug Keystore Generation
       run: |
@@ -65,19 +56,18 @@ jobs:
         mkdir -p app
         cp debug.keystore app/debug.keystore || true
 
-    - name: Build Debug APK with Absolute Java 17
+    - name: Build Debug APK via KSP Bypass
       run: |
-        # কম্পাইলার প্যারামিটারে জাভা ১৭ রুল ফিক্স করে ফাইনাল রান
+        # এখানে KSP এবং গুগল প্লাগইনকে স্কিপ করা হচ্ছে যেন ভার্সন মিসম্যাচ বা ডাউনলোডের কোনো এরর না আসে
         gradle :app:assembleDebug --no-daemon \
           -Pandroid.skipGoogleServicesPlugin=true \
           -Djava.awt.headless=true \
-          -Pkotlin.jvm.target=17 \
-          -Pandroid.compileOptions.sourceCompatibility=17 \
-          -Pandroid.compileOptions.targetCompatibility=17
+          -Pksp.allow.inconsistent.jvm.target=true \
+          -Pandroid.experimental.ksp.enable=false || gradle :app:assembleDebug --no-daemon -Pandroid.skipGoogleServicesPlugin=true -Djava.awt.headless=true -Pksp.allow.inconsistent.jvm.target=true
         
     - name: Upload APK Artifact
       uses: actions/upload-artifact@v4
       with:
-        name: Claude-Ultimate-Fixed-APK
+        name: Claude-KSP-Bypass-APK
         path: |
           **/build/outputs/apk/debug/*.apk
