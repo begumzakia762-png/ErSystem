@@ -39,8 +39,32 @@ jobs:
       with:
         gradle-version: 9.3.1
 
-    - name: Pure Headless Configuration
+    - name: Create Ultimate Gradle Init Script
       run: |
+        # একটি গ্লোবাল ইনিট স্ক্রিপ্ট তৈরি করা হচ্ছে যা সব প্রোজেক্ট ও টাস্কের জাভা টার্গেট ১৭ করে দেবে
+        cat << 'EOF' > init.gradle
+        allprojects {
+            gradle.projectsEvaluated {
+                tasks.withType(JavaCompile).configureEach {
+                    sourceCompatibility = "17"
+                    targetCompatibility = "17"
+                }
+                tasks.configureEach { task ->
+                    if (task.class.name.contains("KotlinCompile") || task.class.name.contains("Ksp")) {
+                        try {
+                            task.compilerOptions.jvmTarget.set(org.jetbrains.kotlin.gradle.dsl.JvmTarget.JVM_17)
+                        } catch (Exception e) {
+                            try {
+                                task.jvmTarget = "17"
+                            } catch (Exception e2) {}
+                        }
+                    }
+                }
+            }
+        }
+        EOF
+        
+        # হেডলেস মোড কনফিগারেশন
         echo "GRADLE_OPTS=-Djava.awt.headless=true -Dorg.gradle.jvmargs=\"-Xmx2048m -Djava.awt.headless=true\"" >> $GITHUB_ENV
         echo "systemProp.java.awt.headless=true" >> gradle.properties
         echo "org.gradle.jvmargs=-Djava.awt.headless=true -Xmx2048m" >> gradle.properties
@@ -55,21 +79,17 @@ jobs:
         mkdir -p app
         cp debug.keystore app/debug.keystore || true
 
-    - name: Build Debug APK with Safe Toolchain Injection
+    - name: Build Debug APK with Init Script
       run: |
-        # প্রজেক্টের মূল ফাইলে হাত না দিয়ে, রান-টাইমে গ্রেডলের সমস্ত কম্পাইলারকে জাভা ১৭-তে বাধ্য করা হচ্ছে
-        # এতে লাইব্রেরির ভার্সন পুরোপুরি সেফ থাকবে
+        # --init-script ফ্ল্যাগ দিয়ে গ্র্যাডলকে বাধ্য করা হচ্ছে সব কম্পাইলারকে জাভা ১৭ মোডে চালাতে
         gradle :app:assembleDebug --no-daemon \
+          --init-script init.gradle \
           -Pandroid.skipGoogleServicesPlugin=true \
-          -Djava.awt.headless=true \
-          -Pandroid.experimental.ksp.enable=true \
-          -Porg.gradle.java.installations.auto-download=false \
-          -Porg.gradle.java.installations.auto-detect=true \
-          "-Dorg.gradle.jvmargs=-Xmx2048m -Djava.awt.headless=true"
+          -Djava.awt.headless=true
         
     - name: Upload APK Artifact
       uses: actions/upload-artifact@v4
       with:
-        name: Claude-Safe-Toolchain-APK
+        name: Claude-InitScript-Fixed-APK
         path: |
           **/build/outputs/apk/debug/*.apk
