@@ -39,13 +39,25 @@ jobs:
       with:
         gradle-version: 9.3.1
 
-    - name: Setup Safe Environment & Headless Mode
+    - name: Precise Java 17 Target Fix & Headless Mode
       run: |
-        # ফাইল এডিটের কোনো ঝামেলা নেই, লাইব্রেরি ভার্সন সব একদম ক্লদের অরিজিনালটাই থাকবে
+        # গ্লোবাল হেডলেস মোড
         echo "GRADLE_OPTS=-Djava.awt.headless=true -Dorg.gradle.jvmargs=\"-Xmx2048m -Djava.awt.headless=true\"" >> $GITHUB_ENV
         echo "systemProp.java.awt.headless=true" >> gradle.properties
         echo "org.gradle.jvmargs=-Djava.awt.headless=true -Xmx2048m" >> gradle.properties
         echo "kotlin.daemon.jvmargs=-Djava.awt.headless=true" >> gradle.properties
+        
+        # অত্যন্ত নিখুঁতভাবে শুধুমাত্র jvmTarget এবং compatibility ব্লকগুলোর জাভা ৮-কে ১৭ করা হচ্ছে
+        # (এতে লাইব্রেরি বা কোルーটিন ভার্সন একটুও নষ্ট হবে না)
+        find . -name "build.gradle*" -type f -exec sed -i 's/jvmTarget = "1.8"/jvmTarget = "17"/g' {} +
+        find . -name "build.gradle*" -type f -exec sed -i 's/jvmTarget = 1.8/jvmTarget = 17/g' {} +
+        find . -name "build.gradle*" -type f -exec sed -i 's/jvmTarget = JavaVersion.VERSION_1_8/jvmTarget = JavaVersion.VERSION_17/g' {} +
+        find . -name "build.gradle*" -type f -exec sed -i 's/sourceCompatibility = JavaVersion.VERSION_1_8/sourceCompatibility = JavaVersion.VERSION_17/g' {} +
+        find . -name "build.gradle*" -type f -exec sed -i 's/targetCompatibility = JavaVersion.VERSION_1_8/targetCompatibility = JavaVersion.VERSION_17/g' {} +
+        find . -name "build.gradle*" -type f -exec sed -i 's/sourceCompatibility JavaVersion.VERSION_1_8/sourceCompatibility JavaVersion.VERSION_17/g' {} +
+        find . -name "build.gradle*" -type f -exec sed -i 's/targetCompatibility JavaVersion.VERSION_1_8/targetCompatibility JavaVersion.VERSION_17/g' {} +
+        find . -name "build.gradle*" -type f -exec sed -i 's/compatibility = "1.8"/compatibility = "17"/g' {} +
+        find . -name "build.gradle*" -type f -exec sed -i 's/compatibility = 1.8/compatibility = 17/g' {} +
 
     - name: Smart Debug Keystore Generation
       run: |
@@ -56,18 +68,14 @@ jobs:
         mkdir -p app
         cp debug.keystore app/debug.keystore || true
 
-    - name: Build Debug APK via KSP Bypass
+    - name: Build Debug APK
       run: |
-        # এখানে KSP এবং গুগল প্লাগইনকে স্কিপ করা হচ্ছে যেন ভার্সন মিসম্যাচ বা ডাউনলোডের কোনো এরর না আসে
-        gradle :app:assembleDebug --no-daemon \
-          -Pandroid.skipGoogleServicesPlugin=true \
-          -Djava.awt.headless=true \
-          -Pksp.allow.inconsistent.jvm.target=true \
-          -Pandroid.experimental.ksp.enable=false || gradle :app:assembleDebug --no-daemon -Pandroid.skipGoogleServicesPlugin=true -Djava.awt.headless=true -Pksp.allow.inconsistent.jvm.target=true
+        # এবার ফ্রেশ ডিপেন্ডেন্সি এবং নিখুঁত কমপ্লায়েন্সের সাথে বিল্ড রান
+        gradle :app:assembleDebug --no-daemon -Pandroid.skipGoogleServicesPlugin=true -Djava.awt.headless=true
         
     - name: Upload APK Artifact
       uses: actions/upload-artifact@v4
       with:
-        name: Claude-KSP-Bypass-APK
+        name: Claude-Safe-Fixed-APK
         path: |
           **/build/outputs/apk/debug/*.apk
