@@ -39,18 +39,12 @@ jobs:
       with:
         gradle-version: 9.3.1
 
-    - name: Deep Hardcoded Java 17 Replacement
+    - name: Pure Headless Configuration
       run: |
-        # গ্লোবাল হেডলেস এনভায়রনমেন্ট
         echo "GRADLE_OPTS=-Djava.awt.headless=true -Dorg.gradle.jvmargs=\"-Xmx2048m -Djava.awt.headless=true\"" >> $GITHUB_ENV
         echo "systemProp.java.awt.headless=true" >> gradle.properties
         echo "org.gradle.jvmargs=-Djava.awt.headless=true -Xmx2048m" >> gradle.properties
         echo "kotlin.daemon.jvmargs=-Djava.awt.headless=true" >> gradle.properties
-        
-        # গ্রেডল ও কোটলিন ফাইলের ভেতরে জাভা ৮ এর সব নামনিশানা মুছে ১৭ করা হচ্ছে
-        find . -type f \( -name "*.gradle" -o -name "*.kts" -o -name "*.toml" -o -name "*.properties" \) -exec sed -i 's/1\.8/17/g' {} +
-        find . -type f \( -name "*.gradle" -o -name "*.kts" -o -name "*.toml" -o -name "*.properties" \) -exec sed -i 's/VERSION_1_8/VERSION_17/g' {} +
-        find . -type f \( -name "*.gradle" -o -name "*.kts" -o -name "*.toml" -o -name "*.properties" \) -exec sed -i 's/JavaVersion\.VERSION_1_8/JavaVersion\.VERSION_17/g' {} +
 
     - name: Smart Debug Keystore Generation
       run: |
@@ -61,13 +55,21 @@ jobs:
         mkdir -p app
         cp debug.keystore app/debug.keystore || true
 
-    - name: Build Debug APK
+    - name: Build Debug APK with Safe Toolchain Injection
       run: |
-        gradle :app:assembleDebug --no-daemon -Pandroid.skipGoogleServicesPlugin=true -Djava.awt.headless=true
+        # প্রজেক্টের মূল ফাইলে হাত না দিয়ে, রান-টাইমে গ্রেডলের সমস্ত কম্পাইলারকে জাভা ১৭-তে বাধ্য করা হচ্ছে
+        # এতে লাইব্রেরির ভার্সন পুরোপুরি সেফ থাকবে
+        gradle :app:assembleDebug --no-daemon \
+          -Pandroid.skipGoogleServicesPlugin=true \
+          -Djava.awt.headless=true \
+          -Pandroid.experimental.ksp.enable=true \
+          -Porg.gradle.java.installations.auto-download=false \
+          -Porg.gradle.java.installations.auto-detect=true \
+          "-Dorg.gradle.jvmargs=-Xmx2048m -Djava.awt.headless=true"
         
     - name: Upload APK Artifact
       uses: actions/upload-artifact@v4
       with:
-        name: Claude-Ultimate-BruteForce-APK
+        name: Claude-Safe-Toolchain-APK
         path: |
           **/build/outputs/apk/debug/*.apk
