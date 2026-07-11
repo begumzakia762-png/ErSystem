@@ -1,4 +1,4 @@
-name: Build Android APK from Direct ZIP
+name: Build Android APK (Java 8 Fallback)
 
 on:
   push:
@@ -25,11 +25,11 @@ jobs:
           mv */.* . 2>/dev/null || true
         fi
 
-    - name: Set up JDK 17
+    - name: Set up JDK 8 (Matches Claude Project)
       uses: actions/setup-java@v4
       with:
         distribution: 'zulu'
-        java-version: '17'
+        java-version: '8' # পুরো সিস্টেমকে জাভা ৮-এ ডাউনগ্রেড করা হলো যেন কোনো মিসম্যাচ না হয়
 
     - name: Setup Android SDK
       uses: android-actions/setup-android@v3
@@ -39,25 +39,12 @@ jobs:
       with:
         gradle-version: 9.3.1
 
-    - name: Precise Java 17 Target Fix & Headless Mode
+    - name: Force Headless Mode Globally
       run: |
-        # গ্লোবাল হেডলেস মোড
         echo "GRADLE_OPTS=-Djava.awt.headless=true -Dorg.gradle.jvmargs=\"-Xmx2048m -Djava.awt.headless=true\"" >> $GITHUB_ENV
         echo "systemProp.java.awt.headless=true" >> gradle.properties
         echo "org.gradle.jvmargs=-Djava.awt.headless=true -Xmx2048m" >> gradle.properties
         echo "kotlin.daemon.jvmargs=-Djava.awt.headless=true" >> gradle.properties
-        
-        # অত্যন্ত নিখুঁতভাবে শুধুমাত্র jvmTarget এবং compatibility ব্লকগুলোর জাভা ৮-কে ১৭ করা হচ্ছে
-        # (এতে লাইব্রেরি বা কোルーটিন ভার্সন একটুও নষ্ট হবে না)
-        find . -name "build.gradle*" -type f -exec sed -i 's/jvmTarget = "1.8"/jvmTarget = "17"/g' {} +
-        find . -name "build.gradle*" -type f -exec sed -i 's/jvmTarget = 1.8/jvmTarget = 17/g' {} +
-        find . -name "build.gradle*" -type f -exec sed -i 's/jvmTarget = JavaVersion.VERSION_1_8/jvmTarget = JavaVersion.VERSION_17/g' {} +
-        find . -name "build.gradle*" -type f -exec sed -i 's/sourceCompatibility = JavaVersion.VERSION_1_8/sourceCompatibility = JavaVersion.VERSION_17/g' {} +
-        find . -name "build.gradle*" -type f -exec sed -i 's/targetCompatibility = JavaVersion.VERSION_1_8/targetCompatibility = JavaVersion.VERSION_17/g' {} +
-        find . -name "build.gradle*" -type f -exec sed -i 's/sourceCompatibility JavaVersion.VERSION_1_8/sourceCompatibility JavaVersion.VERSION_17/g' {} +
-        find . -name "build.gradle*" -type f -exec sed -i 's/targetCompatibility JavaVersion.VERSION_1_8/targetCompatibility JavaVersion.VERSION_17/g' {} +
-        find . -name "build.gradle*" -type f -exec sed -i 's/compatibility = "1.8"/compatibility = "17"/g' {} +
-        find . -name "build.gradle*" -type f -exec sed -i 's/compatibility = 1.8/compatibility = 17/g' {} +
 
     - name: Smart Debug Keystore Generation
       run: |
@@ -68,14 +55,14 @@ jobs:
         mkdir -p app
         cp debug.keystore app/debug.keystore || true
 
-    - name: Build Debug APK
+    - name: Build Debug APK with Java 8
       run: |
-        # এবার ফ্রেশ ডিপেন্ডেন্সি এবং নিখুঁত কমপ্লায়েন্সের সাথে বিল্ড রান
+        # ক্লদের অরিজিনাল কোড যেভাবে আছে, সেভাবেই জাভা ৮ এনভায়রনমেন্টে রান করা হচ্ছে
         gradle :app:assembleDebug --no-daemon -Pandroid.skipGoogleServicesPlugin=true -Djava.awt.headless=true
         
     - name: Upload APK Artifact
       uses: actions/upload-artifact@v4
       with:
-        name: Claude-Safe-Fixed-APK
+        name: Claude-Java8-App-APK
         path: |
           **/build/outputs/apk/debug/*.apk
