@@ -16,10 +16,7 @@ jobs:
 
     - name: Clean & Unzip Project File
       run: |
-        # সার্ভারে জিপ ফাইলটি আনজিপ করা হচ্ছে
         unzip -o *.zip
-        
-        # যদি ফাইলগুলো কোনো সাব-ফোল্ডারে থাকে, সেগুলোকে মেইন রুটে নিয়ে আসা
         if [ -d "app" ] || [ -f "build.gradle.kts" ] || [ -f "build.gradle" ]; then
           echo "Files are already in root."
         else
@@ -42,16 +39,19 @@ jobs:
       with:
         gradle-version: 9.3.1
 
-    - name: Force Headless Mode Globally
+    - name: Force Java 17 Compatibility & Headless Mode
       run: |
+        # গ্লোবাল এনভায়রনমেন্ট এবং গ্রেডল প্রোপার্টিজে জাভা ১৭ এবং হেডলেস মোড ফোর্স করা হচ্ছে
         echo "GRADLE_OPTS=-Djava.awt.headless=true -Dorg.gradle.jvmargs=\"-Xmx2048m -Djava.awt.headless=true\"" >> $GITHUB_ENV
         echo "systemProp.java.awt.headless=true" >> gradle.properties
         echo "org.gradle.jvmargs=-Djava.awt.headless=true -Xmx2048m" >> gradle.properties
         echo "kotlin.daemon.jvmargs=-Djava.awt.headless=true" >> gradle.properties
+        
+        # বিল্ডের সময় জাভা ভার্সন মিসম্যাচ এড়াতে গ্রেডল অপশন যোগ
+        echo "org.gradle.java.home=${JAVA_HOME_17_X64}" >> gradle.properties
 
     - name: Smart Debug Keystore Generation
       run: |
-        # মেইন এবং সাব-ডিরেক্টরিতে সাইনিং চাবি তৈরি করা যেন কোনো পাথ এরর না আসে
         keytool -genkey -v -keystore debug.keystore -storepass android -alias androiddebugkey -keypass android -keyalg RSA -keysize 2048 -validity 10000 -dname "CN=Android Debug,O=Android,C=US"
         REPO_NAME=$(basename $GITHUB_REPOSITORY)
         mkdir -p ../$REPO_NAME
@@ -59,13 +59,12 @@ jobs:
         mkdir -p app
         cp debug.keystore app/debug.keystore || true
 
-    - name: Build Debug APK
+    - name: Build Debug APK with Java 17 Target
       run: |
-        gradle :app:assembleDebug --no-daemon -Pandroid.skipGoogleServicesPlugin=true -Djava.awt.headless=true
-
-    - name: Upload APK Artifact
-      uses: actions/upload-artifact@v4
-      with:
-        name: Claude-ZIP-App-APK
-        path: |
-          **/build/outputs/apk/debug/*.apk
+        # কম্পাইলারকে স্পষ্ট নির্দেশ দেওয়া হচ্ছে জাভা ১৭ ব্যবহার করতে যেন কোনো মিসম্যাচ না হয়
+        gradle :app:assembleDebug --no-daemon \
+          -Pandroid.skipGoogleServicesPlugin=true \
+          -Djava.awt.headless=true \
+          -Dorg.gradle.java.home=$JAVA_HOME \
+          -Pandroid.compileOptions.sourceCompatibility=17 \
+          -Pandroid.compileOptions.targetCompatibility=17
