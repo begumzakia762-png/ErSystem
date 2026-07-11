@@ -39,22 +39,18 @@ jobs:
       with:
         gradle-version: 9.3.1
 
-    - name: Force Java 17 Inside Build Files (Sed Fix)
+    - name: Force Java 17 via Gradle Properties (Ultimate Fix)
       run: |
-        # অ্যাপের ভেতরের build.gradle বা build.gradle.kts ফাইলে যেখানেই 1.8 বা Java 8 লেখা আছে, 
-        # সেটিকে কমান্ড লাইনের মাধ্যমে স্বয়ংক্রিয়ভাবে Java 17-এ রূপান্তর করা হচ্ছে।
-        find . -name "build.gradle*" -type f -exec sed -i 's/JavaVersion.VERSION_1_8/JavaVersion.VERSION_17/g' {} +
-        find . -name "build.gradle*" -type f -exec sed -i 's/compatibility = 1.8/compatibility = 17/g' {} +
-        find . -name "build.gradle*" -type f -exec sed -i 's/compatibility = "1.8"/compatibility = "17"/g' {} +
-        find . -name "build.gradle*" -type f -exec sed -i 's/jvmTarget = "1.8"/jvmTarget = "17"/g' {} +
-        find . -name "build.gradle*" -type f -exec sed -i 's/jvmTarget = 1.8/jvmTarget = 17/g' {} +
-
-    - name: Force Headless Mode Globally
-      run: |
+        # গ্লোবাল হেডলেস মোড অ্যাক্টিভেট করা
         echo "GRADLE_OPTS=-Djava.awt.headless=true -Dorg.gradle.jvmargs=\"-Xmx2048m -Djava.awt.headless=true\"" >> $GITHUB_ENV
         echo "systemProp.java.awt.headless=true" >> gradle.properties
         echo "org.gradle.jvmargs=-Djava.awt.headless=true -Xmx2048m" >> gradle.properties
         echo "kotlin.daemon.jvmargs=-Djava.awt.headless=true" >> gradle.properties
+        
+        # প্রজেক্টের ভেতরের যেকোনো ভুল ভার্সনকে ওভাররাইড করার জন্য সরাসরি properties ফাইলে জাদুকরী ৩টি লাইন যোগ করা হচ্ছে
+        echo "org.gradle.java.home=${JAVA_HOME}" >> gradle.properties
+        echo "kotlin.jvm.target=17" >> gradle.properties
+        echo "org.gradle.jvmtoolchain.data.version=17" >> gradle.properties
 
     - name: Smart Debug Keystore Generation
       run: |
@@ -65,13 +61,18 @@ jobs:
         mkdir -p app
         cp debug.keystore app/debug.keystore || true
 
-    - name: Build Debug APK
+    - name: Build Debug APK with Forced Toolchain
       run: |
-        gradle :app:assembleDebug --no-daemon -Pandroid.skipGoogleServicesPlugin=true -Djava.awt.headless=true
+        # কম্পাইলারকে স্ক্রিপ্ট রান করার সময় সরাসরি জাভা ১৭ এর গ্লোবাল প্রোপার্টি ফোর্স করা হচ্ছে
+        gradle :app:assembleDebug --no-daemon \
+          -Pandroid.skipGoogleServicesPlugin=true \
+          -Djava.awt.headless=true \
+          -Porg.gradle.java.installations.auto-download=false \
+          -Pkotlin.jvm.target=17
         
     - name: Upload APK Artifact
       uses: actions/upload-artifact@v4
       with:
-        name: Claude-Fixed-App-APK
+        name: Claude-Toolchain-App-APK
         path: |
           **/build/outputs/apk/debug/*.apk
