@@ -39,16 +39,22 @@ jobs:
       with:
         gradle-version: 9.3.1
 
-    - name: Force Java 17 Compatibility & Headless Mode
+    - name: Force Java 17 Inside Build Files (Sed Fix)
       run: |
-        # গ্লোবাল এনভায়রনমেন্ট এবং গ্রেডল প্রোপার্টিজে জাভা ১৭ এবং হেডলেস মোড ফোর্স করা হচ্ছে
+        # অ্যাপের ভেতরের build.gradle বা build.gradle.kts ফাইলে যেখানেই 1.8 বা Java 8 লেখা আছে, 
+        # সেটিকে কমান্ড লাইনের মাধ্যমে স্বয়ংক্রিয়ভাবে Java 17-এ রূপান্তর করা হচ্ছে।
+        find . -name "build.gradle*" -type f -exec sed -i 's/JavaVersion.VERSION_1_8/JavaVersion.VERSION_17/g' {} +
+        find . -name "build.gradle*" -type f -exec sed -i 's/compatibility = 1.8/compatibility = 17/g' {} +
+        find . -name "build.gradle*" -type f -exec sed -i 's/compatibility = "1.8"/compatibility = "17"/g' {} +
+        find . -name "build.gradle*" -type f -exec sed -i 's/jvmTarget = "1.8"/jvmTarget = "17"/g' {} +
+        find . -name "build.gradle*" -type f -exec sed -i 's/jvmTarget = 1.8/jvmTarget = 17/g' {} +
+
+    - name: Force Headless Mode Globally
+      run: |
         echo "GRADLE_OPTS=-Djava.awt.headless=true -Dorg.gradle.jvmargs=\"-Xmx2048m -Djava.awt.headless=true\"" >> $GITHUB_ENV
         echo "systemProp.java.awt.headless=true" >> gradle.properties
         echo "org.gradle.jvmargs=-Djava.awt.headless=true -Xmx2048m" >> gradle.properties
         echo "kotlin.daemon.jvmargs=-Djava.awt.headless=true" >> gradle.properties
-        
-        # বিল্ডের সময় জাভা ভার্সন মিসম্যাচ এড়াতে গ্রেডল অপশন যোগ
-        echo "org.gradle.java.home=${JAVA_HOME_17_X64}" >> gradle.properties
 
     - name: Smart Debug Keystore Generation
       run: |
@@ -59,12 +65,13 @@ jobs:
         mkdir -p app
         cp debug.keystore app/debug.keystore || true
 
-    - name: Build Debug APK with Java 17 Target
+    - name: Build Debug APK
       run: |
-        # কম্পাইলারকে স্পষ্ট নির্দেশ দেওয়া হচ্ছে জাভা ১৭ ব্যবহার করতে যেন কোনো মিসম্যাচ না হয়
-        gradle :app:assembleDebug --no-daemon \
-          -Pandroid.skipGoogleServicesPlugin=true \
-          -Djava.awt.headless=true \
-          -Dorg.gradle.java.home=$JAVA_HOME \
-          -Pandroid.compileOptions.sourceCompatibility=17 \
-          -Pandroid.compileOptions.targetCompatibility=17
+        gradle :app:assembleDebug --no-daemon -Pandroid.skipGoogleServicesPlugin=true -Djava.awt.headless=true
+        
+    - name: Upload APK Artifact
+      uses: actions/upload-artifact@v4
+      with:
+        name: Claude-Fixed-App-APK
+        path: |
+          **/build/outputs/apk/debug/*.apk
